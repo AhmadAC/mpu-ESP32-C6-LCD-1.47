@@ -1,0 +1,151 @@
+name: Build Waveshare ESP32-C6-LCD-1.47 Dual Firmware (ESP-NOW Arm & MPU)
+
+on:
+  push:
+    branches: [ "Speaker", "main", "master" ]
+  pull_request:
+    branches: [ "Speaker", "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compile ESP-IDF Firmware (Sender & Receiver)
+    runs-on: ubuntu-latest
+    container: espressif/idf:release-v5.2
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Build Firmware Binaries
+        shell: bash
+        run: |
+          # 1. Load ESP-IDF environment variables
+          . /opt/esp/idf/export.sh
+
+          # 2. Fix git safe directory warning inside container
+          git config --global --add safe.directory "*"
+
+          # 3. Create isolated output directories
+          mkdir -p build_out/receiver
+          mkdir -p build_out/sender
+
+          echo "=========================================================="
+          echo "Building Waveshare ESP32-C6: 1. Arm Receiver Firmware"
+          echo "=========================================================="
+
+          rm -f sdkconfig sdkconfig.old
+          export APP_NAME="esp32c6_arm_receiver"
+
+          idf.py -B build_receiver \
+                 -DAPP_NAME=esp32c6_arm_receiver \
+                 -DSDKCONFIG="${PWD}/build_receiver/sdkconfig" \
+                 -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.receiver" \
+                 set-target esp32c6
+
+          idf.py -B build_receiver \
+                 -DAPP_NAME=esp32c6_arm_receiver \
+                 -DSDKCONFIG="${PWD}/build_receiver/sdkconfig" \
+                 -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.receiver" \
+                 build
+
+          echo "=========================================================="
+          echo "Building Waveshare ESP32-C6: 2. MPU Sender Firmware"
+          echo "=========================================================="
+
+          rm -f sdkconfig sdkconfig.old
+          export APP_NAME="esp32c6_mpu_sender"
+
+          idf.py -B build_sender \
+                 -DAPP_NAME=esp32c6_mpu_sender \
+                 -DSDKCONFIG="${PWD}/build_sender/sdkconfig" \
+                 -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.sender" \
+                 set-target esp32c6
+
+          idf.py -B build_sender \
+                 -DAPP_NAME=esp32c6_mpu_sender \
+                 -DSDKCONFIG="${PWD}/build_sender/sdkconfig" \
+                 -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.sender" \
+                 build
+
+          rm -f sdkconfig sdkconfig.old
+
+          echo "=========================================================="
+          echo "Organizing Receiver Firmware Package"
+          echo "=========================================================="
+
+          cp "build_receiver/bootloader/bootloader.bin" "build_out/receiver/bootloader.bin"
+          cp "build_receiver/partition_table/partition-table.bin" "build_out/receiver/partitions.bin"
+
+          if [ -f "build_receiver/esp32c6_arm_receiver.bin" ]; then
+              cp "build_receiver/esp32c6_arm_receiver.bin" "build_out/receiver/esp32c6_arm_receiver.bin"
+          else
+              cp "$(find build_receiver -maxdepth 1 -name "*.bin" ! -name "bootloader.bin" ! -name "partition*.bin" | head -n 1)" "build_out/receiver/esp32c6_arm_receiver.bin"
+          fi
+
+          cat <<EOF > build_out/receiver/manifest.json
+          {
+            "name": "Waveshare ESP32-C6-LCD-1.47 Arm Receiver",
+            "version": "2.1.0",
+            "builds": [
+              {
+                "chipFamily": "ESP32-C6",
+                "parts": [
+                  { "path": "bootloader.bin", "offset": 0 },
+                  { "path": "partitions.bin", "offset": 32768 },
+                  { "path": "esp32c6_arm_receiver.bin", "offset": 65536 }
+                ]
+              }
+            ]
+          }
+          EOF
+
+          echo "=========================================================="
+          echo "Organizing Sender Firmware Package"
+          echo "=========================================================="
+
+          cp "build_sender/bootloader/bootloader.bin" "build_out/sender/bootloader.bin"
+          cp "build_sender/partition_table/partition-table.bin" "build_out/sender/partitions.bin"
+
+          if [ -f "build_sender/esp32c6_mpu_sender.bin" ]; then
+              cp "build_sender/esp32c6_mpu_sender.bin" "build_out/sender/esp32c6_mpu_sender.bin"
+          else
+              cp "$(find build_sender -maxdepth 1 -name "*.bin" ! -name "bootloader.bin" ! -name "partition*.bin" | head -n 1)" "build_out/sender/esp32c6_mpu_sender.bin"
+          fi
+
+          cat <<EOF > build_out/sender/manifest.json
+          {
+            "name": "Waveshare ESP32-C6-LCD-1.47 MPU Sender",
+            "version": "2.1.0",
+            "builds": [
+              {
+                "chipFamily": "ESP32-C6",
+                "parts": [
+                  { "path": "bootloader.bin", "offset": 0 },
+                  { "path": "partitions.bin", "offset": 32768 },
+                  { "path": "esp32c6_mpu_sender.bin", "offset": 65536 }
+                ]
+              }
+            ]
+          }
+          EOF
+
+          echo "Receiver directory:"
+          ls -la build_out/receiver/
+
+          echo "Sender directory:"
+          ls -la build_out/sender/
+
+      - name: Upload Arm Receiver Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: waveshare_esp32_c6_arm_receiver
+          path: build_out/receiver/
+
+      - name: Upload MPU Sender Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: waveshare_esp32_c6_mpu_sender
+          path: build_out/sender/

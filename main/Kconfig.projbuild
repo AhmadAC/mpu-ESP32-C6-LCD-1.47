@@ -1,0 +1,15 @@
+menu "ESP-NOW Node Configuration"
+    choice NODE_ROLE
+        prompt "Waveshare ESP32-C6 Node Role"
+        default NODE_ROLE_RECEIVER
+        help
+            Select whether this firmware image acts as the Arm Receiver (driving the servos)
+            or the MPU Sender (reading the MPU-6050 and sending tilt commands).
+
+        config NODE_ROLE_RECEIVER
+            bool "Arm Receiver (Servos on Claw/Arm/Shoulder/Scissor)"
+
+        config NODE_ROLE_SENDER
+            bool "MPU Sender (MPU-6050 Motion Controller)"
+    endchoice
+endmenu

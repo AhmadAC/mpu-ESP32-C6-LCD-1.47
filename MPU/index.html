@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100 select-none">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Waveshare ESP32-C6 Robotic Arm &amp; Scissor Lift Control Center</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="imu.css">
+</head>
+
+<body>
+
+  <div id="toast-notification">
+    <svg id="toast-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"></polyline>
+    </svg>
+    <span id="toast-message">Notification</span>
+  </div>
+
+  <header style="padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+    <div>
+      <h1 style="font-size:1.05rem; font-weight:700; letter-spacing:-0.02em;">ESP32-C6 Mission Control</h1>
+      <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
+        <div id="status-dot" style="width:8px; height:8px; border-radius:9999px; background:#f43f5e; box-shadow:0 0 6px #f43f5e; transition:background 0.2s;"></div>
+        <span id="status-text" style="font-size:11px; color:rgba(255,255,255,0.6);">Disconnected</span>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px;">
+      <span id="backend-badge" style="padding:3px 8px; border-radius:9999px; background:rgba(255,255,255,0.1); font-size:10px; color:rgba(255,255,255,0.6);">Core BLE</span>
+    </div>
+  </header>
+
+  <div class="glass-panel" style="margin:8px 0; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0;">
+    <div style="min-width:0; flex:1;">
+      <div style="font-size:10px; color:rgba(255,255,255,0.5); text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">Active Controller</div>
+      <div id="device-name" style="font-size:13px; font-weight:700; color:white; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">None Connected</div>
+    </div>
+    <button id="connect-btn" type="button" onclick="toggleConnection()" style="height:40px; padding:0 16px; border-radius:10px; background:#2563eb; color:white; font-size:12px; font-weight:700; border:none; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(37,99,235,0.4);">
+      <svg style="width:15px; height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m6.5 6.5 11 11L12 23V1l5.5 5.5-11 11"></path>
+      </svg>
+      <span>Connect BLE</span>
+    </button>
+  </div>
+
+  <main style="flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding-right:2px; touch-action:pan-y;" class="no-scrollbar">
+
+    <!-- ESP-NOW Wireless Mesh Status -->
+    <div class="glass-panel panel espnow-panel">
+      <div class="panel-head">
+        <span class="panel-title" style="color:#a855f7;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <line x1="12" y1="20" x2="12.01" y2="20"></line>
+          </svg>
+          ESP-NOW Wireless Mesh
+        </span>
+        <span id="espnow-badge" class="chip chip-warn">Auto-Discovering...</span>
+      </div>
+
+      <div class="espnow-details-row">
+        <div class="espnow-detail-box">
+          <span class="lbl">Role</span>
+          <span class="val" id="espnow-role-val">MPU Sender</span>
+        </div>
+        <div class="espnow-detail-box">
+          <span class="lbl">Peer Node</span>
+          <span class="val" id="espnow-peer-val">--:--:--:--:--:--</span>
+        </div>
+        <div class="espnow-detail-box">
+          <span class="lbl">Signal RSSI</span>
+          <span class="val" id="espnow-rssi-val">-- dBm</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Arm & Master Action Controls -->
+    <div class="glass-panel panel">
+      <div class="panel-head">
+        <span class="panel-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 2v4"></path><path d="M12 18v4"></path>
+            <path d="m4.93 4.93 2.83 2.83"></path><path d="m16.24 16.24 2.83 2.83"></path>
+            <path d="M2 12h4"></path><path d="M18 12h4"></path>
+          </svg>
+          Quick Controls
+        </span>
+        <span id="action-run-badge" class="chip">Idle</span>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <button type="button" class="touch-btn" onclick="homeAllServos()" style="background:#0284c7; flex-direction:row;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+          <span>Home All (90°)</span>
+        </button>
+        <button type="button" class="touch-btn" onclick="detachAllServos()" style="background:#f59e0b; color:#000000; border-color:#f59e0b; flex-direction:row;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+          <span>Detach (Idle)</span>
+        </button>
+        <button type="button" class="touch-btn" onclick="requestStatusSync()" style="background:#1e293b; flex-direction:row;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          <span>Sync State</span>
+        </button>
+        <button type="button" class="touch-btn" onclick="stopAllMotion()" style="background:#ef4444; flex-direction:row;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
+          <span>STOP Motion</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Scissor Lift Control (Servo 4 / Default GP3) -->
+    <div class="glass-panel panel" style="border-color:rgba(245,158,11,0.45);">
+      <div class="panel-head">
+        <span class="panel-title" style="color:#fbbf24;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="7 11 12 6 17 11"></polyline><polyline points="7 17 12 12 17 17"></polyline>
+          </svg>
+          Scissor Lift (MG996R)
+        </span>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <span id="s4-state-badge" class="pin-badge" style="background:rgba(148,163,184,0.15); color:#94a3b8; border-color:rgba(148,163,184,0.3);">IDLE</span>
+          <span id="saved-range-badge" class="chip chip-ok">Range: 0° – 180°</span>
+        </div>
+      </div>
+
+      <!-- Scissor Lift 0-100% Proportional Height Slider -->
+      <div class="servo-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-bottom:4px;">
+          <span style="font-weight:700; color:#f8fafc;">Lift Height: <span id="lift-val" style="color:#fbbf24; font-family:monospace; font-weight:700;">50% (90°)</span></span>
+          <span id="s4-pin-label" class="pin-badge">GP3</span>
+        </div>
+        <input type="range" id="lift-slider" min="0" max="100" value="50"
+               onpointerdown="onLiftSliderStart()" ontouchstart="onLiftSliderStart()"
+               oninput="onLiftSlider(this.value)"
+               onpointerup="onLiftSliderCommit(this.value)" ontouchend="onLiftSliderCommit(this.value)"
+               onchange="onLiftSliderCommit(this.value)">
+        <div class="servo-btn-row">
+          <button type="button" class="trim-btn" onclick="nudgeLiftPercent(-10)">-10%</button>
+          <button type="button" class="trim-btn" onclick="nudgeLiftPercent(-1)">-1%</button>
+          <button type="button" class="trim-btn" onclick="nudgeLiftPercent(1)">+1%</button>
+          <button type="button" class="trim-btn" onclick="nudgeLiftPercent(10)">+10%</button>
+        </div>
+      </div>
+
+      <!-- Quick Preset Buttons -->
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
+        <button type="button" class="touch-btn" onclick="moveToSavedMin()" style="background:#0369a1; flex-direction:row;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"></polyline><line x1="5" y1="21" x2="19" y2="21"></line></svg>
+          <span id="quick-min-lbl">Min (0°)</span>
+        </button>
+        <button type="button" class="touch-btn" onclick="moveToSavedMid()" style="background:#0284c7; flex-direction:row;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+          <span id="quick-mid-lbl">Mid (90°)</span>
+        </button>
+        <button type="button" class="touch-btn" onclick="moveToSavedMax()" style="background:#0369a1; flex-direction:row;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"></polyline><line x1="5" y1="3" x2="19" y2="3"></line></svg>
+          <span id="quick-max-lbl">Max (180°)</span>
+        </button>
+      </div>
+
+      <!-- Scissor End-Stop Trimming -->
+      <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:8px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:10.5px; font-weight:700; color:rgba(255,255,255,0.7); text-transform:uppercase;">End-Stop Trimming (Both Ends)</span>
+          <span id="trim-sync-badge" class="chip chip-ok">Saved</span>
+        </div>
+
+        <div class="servo-card trim-end-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-bottom:4px;">
+            <span style="font-weight:700; color:#fbbf24;">Bottom End: <span id="min-trim-val" style="font-family:monospace; color:#ffffff;">0°</span></span>
+            <button type="button" onclick="testTrimEnd('min')" style="background:#334155; color:#7dd3fc; border:1px solid #475569; border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; cursor:pointer;">Test Min</button>
+          </div>
+          <input type="range" id="min-trim-slider" class="offset-slider" min="0" max="179" value="0"
+                 oninput="onMinTrimSlider(this.value)"
+                 onpointerup="setMinTrimAngle(parseInt(this.value, 10), false)"
+                 ontouchend="setMinTrimAngle(parseInt(this.value, 10), false)">
+          <div class="servo-btn-row">
+            <button type="button" class="trim-btn" onclick="nudgeMinTrim(-10)">-10°</button>
+            <button type="button" class="trim-btn" onclick="nudgeMinTrim(-1)">-1°</button>
+            <button type="button" class="trim-btn" onclick="nudgeMinTrim(1)">+1°</button>
+            <button type="button" class="trim-btn" onclick="nudgeMinTrim(10)">+10°</button>
+          </div>
+        </div>
+
+        <div class="servo-card trim-end-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-bottom:4px;">
+            <span style="font-weight:700; color:#fbbf24;">Top End: <span id="max-trim-val" style="font-family:monospace; color:#ffffff;">180°</span></span>
+            <button type="button" onclick="testTrimEnd('max')" style="background:#334155; color:#7dd3fc; border:1px solid #475569; border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; cursor:pointer;">Test Max</button>
+          </div>
+          <input type="range" id="max-trim-slider" class="offset-slider" min="1" max="180" value="180"
+                 oninput="onMaxTrimSlider(this.value)"
+                 onpointerup="setMaxTrimAngle(parseInt(this.value, 10), false)"
+                 ontouchend="setMaxTrimAngle(parseInt(this.value, 10), false)">
+          <div class="servo-btn-row">
+            <button type="button" class="trim-btn" onclick="nudgeMaxTrim(-10)">-10°</button>
+            <button type="button" class="trim-btn" onclick="nudgeMaxTrim(-1)">-1°</button>
+            <button type="button" class="trim-btn" onclick="nudgeMaxTrim(1)">+1°</button>
+            <button type="button" class="trim-btn" onclick="nudgeMaxTrim(10)">+10°</button>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1.3fr 1fr; gap:6px; margin-top:2px;">
+          <button id="save-scissor-range-btn" type="button" class="touch-btn" onclick="saveScissorRange()" style="background:#10b981; color:white; flex-direction:row;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            </svg>
+            <span id="save-scissor-range-text">Save Trim to Flash</span>
+          </button>
+          <button type="button" class="touch-btn" onclick="resetScissorRange()" style="background:#475569; color:white; flex-direction:row;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10"></polyline>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+            </svg>
+            <span>Reset 0°–180°</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 Arm Joint Sliders (S1 Claw, S2 Arm, S3 Shoulder) -->
+    <div class="glass-panel panel" style="border-color:rgba(56,189,248,0.4);">
+      <div class="panel-head">
+        <span class="panel-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line>
+            <line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line>
+            <line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line>
+            <line x1="17" y1="16" x2="23" y2="16"></line>
+          </svg>
+          Remote Arm Joints
+        </span>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <button id="auto-idle-btn" type="button" onclick="toggleAutoIdle()" class="mode-pill">Auto-Idle: OFF</button>
+          <button id="offset-mode-btn" type="button" onclick="toggleOffsetMode()" class="mode-pill" style="color:#f59e0b; border-color:#f59e0b;">Trim: OFF</button>
+          <button type="button" onclick="requestCalibrationSync()" style="background:none; border:none; color:#38bdf8; font-size:10px; font-weight:700; cursor:pointer;">Fetch</button>
+        </div>
+      </div>
+
+      <!-- Servo 1 (Claw) -->
+      <div class="servo-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span id="s1-header" onclick="editServoName(0)" style="cursor:pointer; font-weight:700;">Servo 1 — Claw: <span id="s1-val" style="color:#38bdf8; font-family:monospace; font-weight:700;">90°</span></span>
+            <span id="s1-pin-label" class="pin-badge">GP0</span>
+            <span id="s1-state-badge" class="pin-badge" style="background:rgba(148,163,184,0.15); color:#94a3b8; border-color:rgba(148,163,184,0.3);">IDLE</span>
+          </div>
+          <span style="font-size:10px; color:rgba(255,255,255,0.5);">Trim: <span id="o1-val" style="color:#f59e0b; font-family:monospace; font-weight:700;">0°</span></span>
+        </div>
+        <input type="range" id="s1-slider" min="0" max="180" value="90"
+               onpointerdown="onSliderStart(0)" ontouchstart="onSliderStart(0)"
+               oninput="onServoSlider(0, this.value)"
+               onpointerup="onSliderCommit(0, this.value)" ontouchend="onSliderCommit(0, this.value)"
+               onchange="onSliderCommit(0, this.value)">
+        <div class="servo-btn-row">
+          <button type="button" class="trim-btn" id="s1-btn-a" onclick="servoStepAction(0, -10, -1)">-10°</button>
+          <button type="button" class="trim-btn" id="s1-btn-b" onclick="servoStepAction(0, -1, 1)">-1°</button>
+          <button type="button" class="trim-btn" id="s1-btn-c" onclick="servoStepAction(0, 1, -5)">+1°</button>
+          <button type="button" class="trim-btn" id="s1-btn-d" onclick="servoStepAction(0, 10, 5)">+10°</button>
+        </div>
+      </div>
+
+      <!-- Servo 2 (Arm) -->
+      <div class="servo-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span id="s2-header" onclick="editServoName(1)" style="cursor:pointer; font-weight:700;">Servo 2 — Arm: <span id="s2-val" style="color:#38bdf8; font-family:monospace; font-weight:700;">90°</span></span>
+            <span id="s2-pin-label" class="pin-badge">GP1</span>
+            <span id="s2-state-badge" class="pin-badge" style="background:rgba(148,163,184,0.15); color:#94a3b8; border-color:rgba(148,163,184,0.3);">IDLE</span>
+          </div>
+          <span style="font-size:10px; color:rgba(255,255,255,0.5);">Trim: <span id="o2-val" style="color:#f59e0b; font-family:monospace; font-weight:700;">0°</span></span>
+        </div>
+        <input type="range" id="s2-slider" min="0" max="180" value="90"
+               onpointerdown="onSliderStart(1)" ontouchstart="onSliderStart(1)"
+               oninput="onServoSlider(1, this.value)"
+               onpointerup="onSliderCommit(1, this.value)" ontouchend="onSliderCommit(1, this.value)"
+               onchange="onSliderCommit(1, this.value)">
+        <div class="servo-btn-row">
+          <button type="button" class="trim-btn" id="s2-btn-a" onclick="servoStepAction(1, -10, -1)">-10°</button>
+          <button type="button" class="trim-btn" id="s2-btn-b" onclick="servoStepAction(1, -1, 1)">-1°</button>
+          <button type="button" class="trim-btn" id="s2-btn-c" onclick="servoStepAction(1, 1, -5)">+1°</button>
+          <button type="button" class="trim-btn" id="s2-btn-d" onclick="servoStepAction(1, 10, 5)">+10°</button>
+        </div>
+      </div>
+
+      <!-- Servo 3 (Shoulder) -->
+      <div class="servo-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span id="s3-header" onclick="editServoName(2)" style="cursor:pointer; font-weight:700;">Servo 3 — Shoulder: <span id="s3-val" style="color:#38bdf8; font-family:monospace; font-weight:700;">90°</span></span>
+            <span id="s3-pin-label" class="pin-badge">GP2</span>
+            <span id="s3-state-badge" class="pin-badge" style="background:rgba(148,163,184,0.15); color:#94a3b8; border-color:rgba(148,163,184,0.3);">IDLE</span>
+          </div>
+          <span style="font-size:10px; color:rgba(255,255,255,0.5);">Trim: <span id="o3-val" style="color:#f59e0b; font-family:monospace; font-weight:700;">0°</span></span>
+        </div>
+        <input type="range" id="s3-slider" min="0" max="180" value="90"
+               onpointerdown="onSliderStart(2)" ontouchstart="onSliderStart(2)"
+               oninput="onServoSlider(2, this.value)"
+               onpointerup="onSliderCommit(2, this.value)" ontouchend="onSliderCommit(2, this.value)"
+               onchange="onSliderCommit(2, this.value)">
+        <div class="servo-btn-row">
+          <button type="button" class="trim-btn" id="s3-btn-a" onclick="servoStepAction(2, -10, -1)">-10°</button>
+          <button type="button" class="trim-btn" id="s3-btn-b" onclick="servoStepAction(2, -1, 1)">-1°</button>
+          <button type="button" class="trim-btn" id="s3-btn-c" onclick="servoStepAction(2, 1, -5)">+1°</button>
+          <button type="button" class="trim-btn" id="s3-btn-d" onclick="servoStepAction(2, 10, 5)">+10°</button>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:2px;">
+        <button id="save-cal-btn" type="button" class="touch-btn" onclick="saveCalibrationOffsets()" style="background:#10b981; color:white; flex-direction:row;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+          </svg>
+          <span id="save-cal-text">Save Trim to Flash</span>
+        </button>
+        <button type="button" class="touch-btn" onclick="homeAllServos()" style="background:#475569; color:white; flex-direction:row;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line>
+            <line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line>
+          </svg>
+          <span>Center All (90°)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Dynamic Hardware GPIO Pin Assignment -->
+    <div class="glass-panel panel" style="border-color:rgba(148,163,184,0.3);">
+      <div class="panel-head">
+        <span class="panel-title" style="color:#94a3b8;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line>
+          </svg>
+          Waveshare ESP32-C6 GPIO Pin Remapping
+        </span>
+        <button type="button" onclick="requestPinSync()" style="background:none; border:none; color:#38bdf8; font-size:10px; font-weight:700; cursor:pointer;">Fetch Pins</button>
+      </div>
+
+      <div style="font-size:10px; color:rgba(255,255,255,0.55); line-height:1.4;">
+        Change servo GPIO pins dynamically at any time. Default safe header pins on ESP32-C6: <code style="color:#7dd3fc;">GP0, GP1, GP2, GP3</code>.
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;">
+        <div class="step-field" style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-weight:700;">S1 Claw</label>
+          <input type="number" id="pin-s1-input" min="0" max="30" value="0">
+          <button type="button" onclick="setServoPin(0, document.getElementById('pin-s1-input').value)" style="background:#334155; color:#7dd3fc; border:1px solid #475569; border-radius:5px; padding:3px 2px; font-size:9.5px; font-weight:700; cursor:pointer;">Apply S1</button>
+        </div>
+        <div class="step-field" style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-weight:700;">S2 Arm</label>
+          <input type="number" id="pin-s2-input" min="0" max="30" value="1">
+          <button type="button" onclick="setServoPin(1, document.getElementById('pin-s2-input').value)" style="background:#334155; color:#7dd3fc; border:1px solid #475569; border-radius:5px; padding:3px 2px; font-size:9.5px; font-weight:700; cursor:pointer;">Apply S2</button>
+        </div>
+        <div class="step-field" style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-weight:700;">S3 Shoulder</label>
+          <input type="number" id="pin-s3-input" min="0" max="30" value="2">
+          <button type="button" onclick="setServoPin(2, document.getElementById('pin-s3-input').value)" style="background:#334155; color:#7dd3fc; border:1px solid #475569; border-radius:5px; padding:3px 2px; font-size:9.5px; font-weight:700; cursor:pointer;">Apply S3</button>
+        </div>
+        <div class="step-field" style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-weight:700; color:#fbbf24;">S4 Scissor</label>
+          <input type="number" id="pin-s4-input" min="0" max="30" value="3">
+          <button type="button" onclick="setServoPin(3, document.getElementById('pin-s4-input').value)" style="background:#334155; color:#fbbf24; border:1px solid #475569; border-radius:5px; padding:3px 2px; font-size:9.5px; font-weight:700; cursor:pointer;">Apply S4</button>
+        </div>
+      </div>
+
+      <button type="button" class="touch-btn" onclick="saveHardwarePins()" style="background:#0284c7; color:white; flex-direction:row;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span>Apply &amp; Save All GPIO Pins</span>
+      </button>
+    </div>
+
+    <!-- 3D Live View -->
+    <div class="glass-panel panel" style="border-color:rgba(56,189,248,0.4);">
+      <div class="panel-head">
+        <span class="panel-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          3D Live View
+        </span>
+        <span id="imu-link-badge" class="chip">No IMU data</span>
+      </div>
+
+      <div class="seg">
+        <button type="button" id="seg-arm" class="seg-btn" onclick="setSceneMode('arm')">Robot Arm</button>
+        <button type="button" id="seg-imu" class="seg-btn active" onclick="setSceneMode('imu')">MPU-6050 Board</button>
+      </div>
+
+      <div class="canvas-wrap"><canvas id="scene-canvas"></canvas></div>
+
+      <div class="canvas-tools">
+        <span id="scene-hint">GY-521 board stands upright on its pins. Drag to orbit, pinch to zoom.</span>
+        <button type="button" class="link-btn" onclick="resetSceneView()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          Reset View
+        </button>
+      </div>
+
+      <div class="euler-row">
+        <div class="euler-cell"><div class="lbl">Roll (X)</div><div class="val" id="imu-roll">--</div><div class="unit">deg</div></div>
+        <div class="euler-cell"><div class="lbl">Pitch (Y)</div><div class="val" id="imu-pitch">--</div><div class="unit">deg</div></div>
+        <div class="euler-cell"><div class="lbl">Yaw (Z)</div><div class="val" id="imu-yaw">--</div><div class="unit">deg</div></div>
+      </div>
+
+      <div class="vec-table">
+        <span></span><span class="axis-head ax-x">X</span><span class="axis-head ax-y">Y</span><span class="axis-head ax-z">Z</span>
+        <span class="row-lbl">Accel g</span>
+        <span class="cell" id="imu-ax">--</span><span class="cell" id="imu-ay">--</span><span class="cell" id="imu-az">--</span>
+        <span class="row-lbl">Gyro dps</span>
+        <span class="cell" id="imu-gx">--</span><span class="cell" id="imu-gy">--</span><span class="cell" id="imu-gz">--</span>
+      </div>
+
+      <div class="meta-line">
+        <span>Temp <span id="imu-temp">--</span></span>
+        <span>|a| <span id="imu-mag">--</span></span>
+      </div>
+    </div>
+
+    <!-- MPU Calibration -->
+    <div class="glass-panel panel" style="border-color:rgba(245,158,11,0.4);">
+      <div class="panel-head">
+        <span class="panel-title" style="color:#f59e0b;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="2" r="2"></circle></svg>
+          MPU Calibration
+        </span>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <span id="cal-chip-gyro" class="chip chip-warn">Gyro: not calibrated</span>
+          <span id="cal-chip-accel" class="chip chip-warn">Accel: not calibrated</span>
+        </div>
+      </div>
+
+      <div id="cal-hint" class="cal-hint">Step 1: Keep sensor resting standing on its pins and tap Calibrate Gyro. Step 2: Keep still and tap Calibrate Accel. Step 3: Tap Set Neutral to lock the standing pose as center (0 deg).</div>
+
+      <div id="cal-progress" class="progress"><div id="cal-progress-bar"></div></div>
+
+      <div class="cal-grid">
+        <button type="button" class="touch-btn cal-btn cal-action" onclick="imuCalibrate('gyro')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
+          <span>Calibrate Gyro</span>
+        </button>
+        <button type="button" class="touch-btn cal-btn cal-action" onclick="imuCalibrate('accel')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><polyline points="8 7 3 12 8 17"></polyline><polyline points="16 7 21 12 16 17"></polyline></svg>
+          <span>Calibrate Accel</span>
+        </button>
+        <button type="button" class="touch-btn cal-btn alt cal-action" onclick="imuCalibrate('neutral')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line></svg>
+          <span>Set Neutral</span>
+        </button>
+        <button type="button" class="touch-btn cal-btn alt cal-action" onclick="imuCalibrate('yaw')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"></path><path d="M5 10l7-7 7 7"></path></svg>
+          <span>Zero Yaw</span>
+        </button>
+      </div>
+
+      <button type="button" class="touch-btn cal-btn danger cal-action" onclick="imuCalibrate('clear')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        <span>Clear All Calibration</span>
+      </button>
+
+      <div class="cal-readout">
+        <span id="cal-gyro-bias">Gyro bias  --</span>
+        <span id="cal-accel-bias">Accel bias  --</span>
+        <span id="cal-neutral">Neutral  --</span>
+      </div>
+    </div>
+
+    <!-- Wireless MPU Motion Control -->
+    <div class="glass-panel panel" style="border-color:rgba(16,185,129,0.4);">
+      <div class="panel-head">
+        <span class="panel-title" style="color:#34d399;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"></path><path d="M14 10V4a2 2 0 0 0-4 0v6"></path><path d="M10 10.5V6a2 2 0 0 0-4 0v8"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path></svg>
+          Wireless MPU Motion Control
+        </span>
+      </div>
+
+      <button id="ctrl-toggle-btn" type="button" class="ctrl-toggle" onclick="toggleMpuControl()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+        <span id="ctrl-toggle-text">MPU Control: OFF</span>
+      </button>
+
+      <div class="gain-row">
+        <span>Sensitivity</span>
+        <input type="range" id="ctrl-gain" min="0.5" max="4" step="0.05" value="2" oninput="onMpuGainInput(this.value)" onchange="onMpuGainCommit(this.value)">
+        <span class="gain-val" id="ctrl-gain-val">2.00x</span>
+      </div>
+
+      <div id="ctrl-axis-rows" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
+    <!-- Programmable Actions Studio -->
+    <div class="glass-panel panel" style="border-color:rgba(168,85,247,0.35);">
+      <div class="panel-head">
+        <span class="panel-title" style="color:#c084fc;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          Programmable Actions
+        </span>
+
+        <div style="display:flex; align-items:center; gap:4px;">
+          <button id="mode-btn-run" type="button" class="mode-pill active" onclick="setActionTapMode('run')">Run</button>
+          <button id="mode-btn-loop" type="button" class="mode-pill" onclick="setActionTapMode('loop')">Loop</button>
+          <button id="mode-btn-edit" type="button" class="mode-pill" onclick="setActionTapMode('edit')">Program</button>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:rgba(255,255,255,0.6);">
+        <span id="action-mode-hint">Tap an action to execute its programmed steps.</span>
+        <button type="button" onclick="stopAllMotion()" style="background:#ef4444; color:white; border:none; border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; cursor:pointer;">Stop</button>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px;" id="actions-grid"></div>
+
+      <!-- Action Step Editor -->
+      <div class="key-editor-panel" id="action-editor-box" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span id="action-editor-title" style="font-size:12px; font-weight:700; color:#f59e0b;">Edit Action Slot 1</span>
+          <button type="button" onclick="closeActionEditor()" style="background:none; border:none; color:rgba(255,255,255,0.5); font-size:11px; cursor:pointer;">Close</button>
+        </div>
+
+        <div>
+          <label style="font-size:10px; color:rgba(255,255,255,0.6); display:block; margin-bottom:4px;">Action Name:</label>
+          <input type="text" id="action-name-input" maxlength="24" placeholder="e.g. Pick &amp; Lift" style="width:100%; background:#1e293b; color:white; border:1px solid #334155; border-radius:8px; padding:7px 10px; font-size:12px; outline:none;">
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+          <span style="font-size:10px; font-weight:700; color:rgba(255,255,255,0.7); text-transform:uppercase;">Sequence Steps</span>
+          <div style="display:flex; gap:6px;">
+            <button type="button" onclick="captureCurrentPoseStep()" style="padding:6px 10px; border-radius:7px; background:#0284c7; color:white; font-size:10.5px; font-weight:700; border:none; cursor:pointer;">+ Capture Pose</button>
+            <button type="button" onclick="addBlankStep()" style="padding:6px 10px; border-radius:7px; background:#334155; color:white; font-size:10.5px; font-weight:700; border:none; cursor:pointer;">+ Step</button>
+          </div>
+        </div>
+
+        <div id="action-steps-list" style="display:flex; flex-direction:column; gap:6px; max-height:240px; overflow-y:auto;"></div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:4px;">
+          <button type="button" class="touch-btn" onclick="testEditorSequence()" style="background:#0284c7; color:white; flex-direction:row;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            <span>Test Sequence</span>
+          </button>
+          <button type="button" class="touch-btn" onclick="saveEditorAction()" style="background:#10b981; color:white; flex-direction:row;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Save to ESP32</span>
+          </button>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+        <button type="button" onclick="syncActionsFromEsp()" style="background:none; border:none; color:#38bdf8; font-size:10px; font-weight:600; cursor:pointer;">Sync from ESP32</button>
+        <button type="button" onclick="resetActionsDefaults()" style="background:none; border:none; color:rgba(255,255,255,0.5); font-size:10px; cursor:pointer;">Reset Defaults</button>
+      </div>
+    </div>
+
+    <!-- Diagnostic Terminal Log -->
+    <div class="glass-panel" style="border-radius:14px; padding:12px; height:170px; display:flex; flex-direction:column; flex-shrink:0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px; font-size:11px; color:rgba(255,255,255,0.6);">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-weight:700;">BLE &amp; ESP-NOW Log</span>
+          <span id="ble-counters" style="font-family:monospace; font-size:10px; color:#38bdf8; font-weight:bold;">RX: 0 | TX: 0</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button type="button" onclick="exportTerminalLogs()" style="background:none; border:none; color:#38bdf8; font-size:11px; cursor:pointer; font-weight:600; display:flex; align-items:center; gap:3px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Export</span>
+          </button>
+          <button type="button" onclick="clearLogs()" style="background:none; border:none; color:rgba(255,255,255,0.5); font-size:11px; cursor:pointer; display:flex; align-items:center; gap:3px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            <span>Clear</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="terminal" style="flex:1; overflow-y:auto; padding-top:6px; font-family:monospace; font-size:10px; color:rgba(255,255,255,0.8); display:flex; flex-direction:column; gap:4px;">
+        <div style="color:rgba(255,255,255,0.4); font-style:italic;">BLE Arm &amp; Scissor Console initialized. Ready to connect...</div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer style="margin-top:8px; flex-shrink:0;">
+    <form onsubmit="handleSendCustom(event)" style="display:flex; gap:8px;">
+      <input type="text" id="cmd-input" placeholder="Command (e.g. s1 90, pin s1 0, pins 0 1 2 3, lift 75, mpu_ctrl on)..." style="flex:1; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding:8px 12px; font-size:12px; color:white; outline:none;">
+      <button type="submit" class="touch-btn" style="min-height:unset; height:38px; padding:0 16px; border-radius:12px; background:#0284c7; color:white; font-size:12px; font-weight:700; border:none; cursor:pointer; flex-direction:row; gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        <span>Send</span>
+      </button>
+    </form>
+  </footer>
+
+  <!-- Native ES Module Entry Point -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
