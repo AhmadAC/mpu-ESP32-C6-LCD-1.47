@@ -85,5 +85,5 @@ extern "C" void app_main(void) {
 
     console_serial_init();
 
-    ESP_LOGI(TAG, "Waveshare ESP32-C6 systems online. Zero-intervention ESP-NOW mesh active.", NODE_ROLE_NAME);
+    ESP_LOGI(TAG, "Waveshare ESP32-C6 [%s] systems online. Zero-intervention ESP-NOW mesh active.", NODE_ROLE_NAME);
 }

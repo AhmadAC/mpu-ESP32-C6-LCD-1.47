@@ -1,12 +1,23 @@
-cmake_minimum_required(VERSION 3.16)
-
-if(DEFINED APP_NAME)
-    set(PROJ_NAME ${APP_NAME})
-elseif(DEFINED ENV{APP_NAME})
-    set(PROJ_NAME $ENV{APP_NAME})
-else()
-    set(PROJ_NAME "esp32c6_arm_receiver")
-endif()
-
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(${PROJ_NAME})
+idf_component_register(
+    SRCS
+        "main.cpp"
+        "ble_server.cpp"
+        "command_processor.cpp"
+        "console_serial.cpp"
+        "espnow_sync.cpp"
+        "imu.cpp"
+        "lcd_display.cpp"
+        "mpu6050.cpp"
+        "mpu_control.cpp"
+        "servo_controller.cpp"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        nvs_flash
+        bt
+        esp_wifi
+        esp_netif
+        esp_event
+        driver
+        esp_timer
+)
