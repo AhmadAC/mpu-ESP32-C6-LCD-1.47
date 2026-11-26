@@ -1,3 +1,4 @@
+// main\console_serial.cpp
 #include "console_serial.h"
 #include "command_processor.h"
 #include "node_config.h"
@@ -35,13 +36,12 @@ static void console_read_task(void *pvParameter) {
 
     vTaskDelay(pdMS_TO_TICKS(400));
 
-    char banner[600];
+    char banner[640];
 #if NODE_IS_SENDER
     snprintf(banner, sizeof(banner),
         "\n==================================================\n"
-        "   Waveshare ESP32-C6-LCD-1.47 Node [%s]\n"
-        "   Display: ST7789 IPS 1.47-inch (172x320)\n"
-        "   Hardware: MPU-6050 (SDA GPIO 18 | SCL GPIO 19)\n"
+        "   Node: [%s] on %s\n"
+        "   Sensor: MPU-6050 (SDA: GP%d | SCL: GP%d)\n"
         "   Wireless Mesh: ESP-NOW Auto-Discovery Channel 1\n"
         "   App Interface: BLE NUS ('%s')\n"
         "==================================================\n"
@@ -49,11 +49,11 @@ static void console_read_task(void *pvParameter) {
         "          'home', 's1 90', 'move 90 90 90 90 500', 'status'\n"
         "==================================================\n"
         "REPL> ",
-        NODE_ROLE_NAME, BLE_DEVICE_NAME);
+        NODE_ROLE_NAME, BOARD_NAME, (int)BOARD_MPU_SDA_PIN, (int)BOARD_MPU_SCL_PIN, BLE_DEVICE_NAME);
 #else
     snprintf(banner, sizeof(banner),
         "\n==================================================\n"
-        "   Waveshare ESP32-C6-LCD-1.47 Node [%s]\n"
+        "   Node: [%s] on %s\n"
         "   Display: ST7789 IPS 1.47-inch (172x320)\n"
         "   Hardware: Claw GP0, Arm GP1, Shoulder GP2, Scissor GP3\n"
         "   Wireless Mesh: ESP-NOW Auto-Discovery Channel 1\n"
@@ -63,7 +63,7 @@ static void console_read_task(void *pvParameter) {
         "          'action_run 1', 'espnow', 'status', 'help'\n"
         "==================================================\n"
         "REPL> ",
-        NODE_ROLE_NAME, BLE_DEVICE_NAME);
+        NODE_ROLE_NAME, BOARD_NAME, BLE_DEVICE_NAME);
 #endif
 
     console_print(banner);

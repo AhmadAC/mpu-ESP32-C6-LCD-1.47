@@ -1,4 +1,5 @@
-name: Build Waveshare ESP32-C6-LCD-1.47 Dual Firmware (ESP-NOW Arm & MPU)
+# .github\workflows\build.yml
+name: Build Cross-Platform Firmware (ESP32-C6 Arm & YD-ESP32-S3 MPU)
 
 on:
   push:
@@ -9,7 +10,7 @@ on:
 
 jobs:
   build:
-    name: Compile ESP-IDF Firmware (Sender & Receiver)
+    name: Compile ESP-IDF Firmware (ESP32-C6 Receiver & ESP32-S3 Sender)
     runs-on: ubuntu-latest
     container: espressif/idf:release-v5.2
 
@@ -22,13 +23,9 @@ jobs:
       - name: Build Firmware Binaries
         shell: bash
         run: |
-          # 1. Load ESP-IDF environment variables
           . /opt/esp/idf/export.sh
-
-          # 2. Fix git safe directory warning inside container
           git config --global --add safe.directory "*"
 
-          # 3. Create isolated output directories
           mkdir -p build_out/receiver
           mkdir -p build_out/sender
 
@@ -52,20 +49,20 @@ jobs:
                  build
 
           echo "=========================================================="
-          echo "Building Waveshare ESP32-C6: 2. MPU Sender Firmware"
+          echo "Building YD-ESP32-S3 v1.3: 2. MPU Sender Firmware"
           echo "=========================================================="
 
           rm -f sdkconfig sdkconfig.old
-          export APP_NAME="esp32c6_mpu_sender"
+          export APP_NAME="esp32s3_mpu_sender"
 
           idf.py -B build_sender \
-                 -DAPP_NAME=esp32c6_mpu_sender \
+                 -DAPP_NAME=esp32s3_mpu_sender \
                  -DSDKCONFIG="${PWD}/build_sender/sdkconfig" \
                  -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.sender" \
-                 set-target esp32c6
+                 set-target esp32s3
 
           idf.py -B build_sender \
-                 -DAPP_NAME=esp32c6_mpu_sender \
+                 -DAPP_NAME=esp32s3_mpu_sender \
                  -DSDKCONFIG="${PWD}/build_sender/sdkconfig" \
                  -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.sender" \
                  build
@@ -73,7 +70,7 @@ jobs:
           rm -f sdkconfig sdkconfig.old
 
           echo "=========================================================="
-          echo "Organizing Receiver Firmware Package"
+          echo "Organizing Receiver Firmware Package (ESP32-C6)"
           echo "=========================================================="
 
           cp "build_receiver/bootloader/bootloader.bin" "build_out/receiver/bootloader.bin"
@@ -88,7 +85,7 @@ jobs:
           cat <<EOF > build_out/receiver/manifest.json
           {
             "name": "Waveshare ESP32-C6-LCD-1.47 Arm Receiver",
-            "version": "2.1.0",
+            "version": "2.2.0",
             "builds": [
               {
                 "chipFamily": "ESP32-C6",
@@ -103,29 +100,29 @@ jobs:
           EOF
 
           echo "=========================================================="
-          echo "Organizing Sender Firmware Package"
+          echo "Organizing Sender Firmware Package (ESP32-S3)"
           echo "=========================================================="
 
           cp "build_sender/bootloader/bootloader.bin" "build_out/sender/bootloader.bin"
           cp "build_sender/partition_table/partition-table.bin" "build_out/sender/partitions.bin"
 
-          if [ -f "build_sender/esp32c6_mpu_sender.bin" ]; then
-              cp "build_sender/esp32c6_mpu_sender.bin" "build_out/sender/esp32c6_mpu_sender.bin"
+          if [ -f "build_sender/esp32s3_mpu_sender.bin" ]; then
+              cp "build_sender/esp32s3_mpu_sender.bin" "build_out/sender/esp32s3_mpu_sender.bin"
           else
-              cp "$(find build_sender -maxdepth 1 -name "*.bin" ! -name "bootloader.bin" ! -name "partition*.bin" | head -n 1)" "build_out/sender/esp32c6_mpu_sender.bin"
+              cp "$(find build_sender -maxdepth 1 -name "*.bin" ! -name "bootloader.bin" ! -name "partition*.bin" | head -n 1)" "build_out/sender/esp32s3_mpu_sender.bin"
           fi
 
           cat <<EOF > build_out/sender/manifest.json
           {
-            "name": "Waveshare ESP32-C6-LCD-1.47 MPU Sender",
-            "version": "2.1.0",
+            "name": "YD-ESP32-S3 v1.3 MPU Sender",
+            "version": "2.2.0",
             "builds": [
               {
-                "chipFamily": "ESP32-C6",
+                "chipFamily": "ESP32-S3",
                 "parts": [
                   { "path": "bootloader.bin", "offset": 0 },
                   { "path": "partitions.bin", "offset": 32768 },
-                  { "path": "esp32c6_mpu_sender.bin", "offset": 65536 }
+                  { "path": "esp32s3_mpu_sender.bin", "offset": 65536 }
                 ]
               }
             ]
@@ -147,5 +144,5 @@ jobs:
       - name: Upload MPU Sender Binaries
         uses: actions/upload-artifact@v4
         with:
-          name: waveshare_esp32_c6_mpu_sender
+          name: yd_esp32_s3_mpu_sender
           path: build_out/sender/

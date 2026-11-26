@@ -1,49 +1,49 @@
+// info.txt
 ================================================================================
-  WAVESHARE ESP32-C6-LCD-1.47 DUAL-NODE WIRELESS ROBOTIC ARM SYSTEM (ESP-NOW)
+  CROSS-PLATFORM WIRELESS ROBOTIC ARM SYSTEM (ESP-NOW)
+  NODE 1: YD-ESP32-S3 v1.3 (MPU SENDER)
+  NODE 2: WAVESHARE ESP32-C6-LCD-1.47 (ARM & SCISSOR RECEIVER)
 ================================================================================
 
 1. ARCHITECTURAL OVERVIEW:
 --------------------------------------------------------------------------------
-The system is partitioned across two Waveshare ESP32-C6-LCD-1.47 boards connected
-over an ad-hoc, low-latency (<5ms) ESP-NOW wireless link:
+The system uses two complementary Espressif SoC architectures linked over an ad-hoc,
+low-latency (<5ms) ESP-NOW wireless link:
 
-NODE 1: MPU SENDER (Motion Controller)
-- Onboard Display: 1.47" ST7789 IPS LCD (172x320) showing live Roll/Pitch/Yaw HUD
-- Sensors: GY-521 MPU-6050 6-Axis IMU connected via I2C (SDA GPIO 18, SCL GPIO 19)
-- Firmware Image: build_out/esp32c6_mpu_sender.bin
+NODE 1: MPU SENDER (YD-ESP32-S3 v1.3)
+- Chip Target: ESP32-S3 (Xtensa Dual-Core LX7)
+- Sensors: GY-521 MPU-6050 6-Axis IMU connected via I2C0 (SDA GPIO 4, SCL GPIO 5)
+- Firmware Image: build_out/sender/esp32s3_mpu_sender.bin
 - Functions: Computes 6-axis complementary orientation fusion, runs stationary
-  noise locking, performs multi-axis calibration, pairs automatically with the Arm
-  Receiver via ESP-NOW discovery, hosts BLE for the iOS / Web interface, and
-  transmits wireless motion vectors.
+  noise locking, multi-axis calibration, pairs automatically with the Arm
+  Receiver via ESP-NOW discovery on Channel 1, hosts BLE NUS for the Web/iOS app,
+  and transmits real-time motion vectors.
+- Note: Avoid GPIO 18, 19, and 20 for I2C (reserved for native USB-JTAG).
 
-NODE 2: ARM RECEIVER (Actuator Controller)
-- Onboard Display: 1.47" ST7789 IPS LCD (172x320) showing live 4-axis joint angles
+NODE 2: ARM RECEIVER (Waveshare ESP32-C6-LCD-1.47)
+- Chip Target: ESP32-C6 (RISC-V 160MHz)
+- Onboard Display: 1.47" ST7789 IPS LCD (172x320) showing live 4-axis HUD
 - Actuators: 3 MP90S/SG90 servos for 3-DOF Arm + 1 MG996R for Scissor Lift
 - Signal Pins: Claw GPIO 0, Arm GPIO 1, Shoulder GPIO 2, Scissor Lift GPIO 3
-- Firmware Image: build_out/esp32c6_arm_receiver.bin
+- Firmware Image: build_out/receiver/esp32c6_arm_receiver.bin
 - Functions: Receives wireless motion packets, drives 50Hz LEDC PWM channels,
-  executes smooth sinusoidal easing, handles auto-idle motor detaching, and executes
+  executes smooth sinusoidal easing, handles auto-idle detaching, and executes
   stored programmable actions.
-
-Available safe header pins: GPIO 0, 1, 2, 3, 18, 19, 20, 23
-Reserved for Onboard LCD: MOSI (GPIO 6), SCLK (GPIO 7), CS (GPIO 14), DC (GPIO 15),
-                         RST (GPIO 21), Backlight PWM (GPIO 22)
-Reserved for Onboard RGB: GPIO 8 | Boot Button: GPIO 9
 
 2. HARDWARE WIRING SPECIFICATION:
 --------------------------------------------------------------------------------
-A. MPU SENDER BOARD:
-   Pin   MPU-6050 Pin   ESP32-C6-LCD-1.47 Pin   Function
-   1     VCC            3.3V                    3.3V Power
-   2     GND            GND                     Common Ground
-   3     SCL            GPIO 19                 I2C0 Clock
-   4     SDA            GPIO 18                 I2C0 Data
-   7     AD0            GND                     I2C Address 0x68 (3.3V = 0x69)
+A. MPU SENDER BOARD (YD-ESP32-S3 v1.3):
+   Pin   MPU-6050 Pin   YD-ESP32-S3 Pin   Function
+   1     VCC            3.3V              3.3V Power
+   2     GND            GND               Common Ground
+   3     SCL            GPIO 5            I2C0 Clock (400kHz)
+   4     SDA            GPIO 4            I2C0 Data  (400kHz)
+   7     AD0            GND               I2C Address 0x68 (3.3V = 0x69)
 
-B. ARM RECEIVER BOARD (Servos connected to header pins):
+B. ARM RECEIVER BOARD (Waveshare ESP32-C6-LCD-1.47):
    Servo Channel   Joint           ESP32-C6 Pin        Power Connection
    Common GND      Ground          GND                 Common Ground tied to external 5V PSU!
-   Servo Power     5V Power        External 5V         5V 2.5A+ supply (Do NOT power servos from 3.3V!)
+   Servo Power     5V Power        External 5V         5V 2.5A+ supply (Never power from 3.3V!)
    Servo 1 (S1)    Claw (Gripper)  GPIO 0              50Hz LEDC PWM (500-2500us)
    Servo 2 (S2)    Arm             GPIO 1              50Hz LEDC PWM (500-2500us)
    Servo 3 (S3)    Shoulder        GPIO 2              50Hz LEDC PWM (500-2500us)
@@ -54,29 +54,10 @@ B. ARM RECEIVER BOARD (Servos connected to header pins):
 1. Channel: Both boards operate on 2.4GHz Wi-Fi Channel 1 (WIFI_IF_STA).
 2. Protocol Magic: 0x59444152 ("YDAR")
 3. Discovery Cycle:
-   - On boot, both boards initialize Wi-Fi in Station mode with software coexistence enabled.
+   - On boot, both boards initialize Wi-Fi in Station mode with coexistence enabled.
    - The Sender and Receiver broadcast periodic discovery beacons.
-   - When a beacon from the complementary role is detected, unicast MACs are registered in
-     the hardware peer table and a two-way handshake completes in under 1 second.
-   - If either board powers down or moves out of range, the link times out after 3.5s and
-     automatically resumes scanning until reconnected.
-   - Live telemetry status is continuously mirrored on both onboard 1.47" LCD screens.
-
-4. COMMAND REFERENCE (BLE & SERIAL REPL):
---------------------------------------------------------------------------------
-- espnow                               : Display wireless link state, peer MAC, and RSSI
-- mpu <on|off>                         : Toggle 20 Hz IMU telemetry stream over BLE
-- mpu_ctrl <on|off>                    : Enable/disable wireless MPU-to-Arm tracking
-- mpu_cal <gyro|accel|neutral|yaw|clear>: Calibrate MPU sensors
-- claw <0-180|open|close>              : Set Claw angle
-- arm <0-180> / shoulder <0-180>       : Move Arm or Shoulder
-- s1 <deg> / s2 <deg> / s3 <deg> / s4  : Move individual joint
-- lift <0-100>                         : Set scissor lift proportional height
-- pins <p1> <p2> <p3> <p4>             : Remap hardware GPIO pins
-- set <s1> <s2> <s3> [s4]              : Set all angles immediately
-- move <s1> <s2> <s3> <s4> [ms]        : Smoothly move joints over duration
-- home                                 : Move all 4 joints to neutral (90 deg)
-- stop                                 : Halt motion and release MPU control
-- detach                               : Disconnect PWM signal to relax servos
-- status                               : Query full system state
+   - When a beacon from the complementary role is detected, unicast MAC addresses
+     are registered and a two-way handshake completes in under 1 second.
+   - If either board powers down, the link times out after 3.5s and automatically
+     resumes beacon scanning until reconnected.
 ================================================================================

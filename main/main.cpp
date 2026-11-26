@@ -1,3 +1,4 @@
+// main\main.cpp
 #include "esp_system.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -56,7 +57,7 @@ extern "C" void app_main(void) {
         ESP_LOGW(TAG, "WARNING: Previous reset was caused by BROWNOUT (power rail sag)!");
     }
 
-    ESP_LOGI(TAG, "Booting Waveshare ESP32-C6-LCD-1.47 [%s] (Reset Reason: %d)...", NODE_ROLE_NAME, (int)rst);
+    ESP_LOGI(TAG, "Booting [%s] on %s (Reset Reason: %d)...", NODE_ROLE_NAME, BOARD_NAME, (int)rst);
 
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -65,7 +66,11 @@ extern "C" void app_main(void) {
     }
     ESP_ERROR_CHECK(ret);
 
+#if HAS_ONBOARD_LCD
     lcd_display_init();
+#else
+    ESP_LOGI(TAG, "No onboard LCD configured for %s; display initialization bypassed.", BOARD_NAME);
+#endif
 
     command_processor_init();
 
@@ -85,5 +90,5 @@ extern "C" void app_main(void) {
 
     console_serial_init();
 
-    ESP_LOGI(TAG, "Waveshare ESP32-C6 [%s] systems online. Zero-intervention ESP-NOW mesh active.", NODE_ROLE_NAME);
+    ESP_LOGI(TAG, "%s [%s] systems online. Zero-intervention ESP-NOW mesh active.", BOARD_NAME, NODE_ROLE_NAME);
 }

@@ -1,22 +1,17 @@
+// main\mpu6050.h
 #pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
 #include "driver/gpio.h"
+#include "node_config.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// MPU-6050 wiring on Waveshare ESP32-C6-LCD-1.47 (I2C0):
-//   VCC -> 3.3V
-//   GND -> GND
-//   SDA -> GPIO 18 (Safe, unshared header pin)
-//   SCL -> GPIO 19 (Safe, unshared header pin)
-//   AD0 -> GND (address 0x68) or 3.3V (address 0x69)
-
-#define MPU6050_SDA_PIN          GPIO_NUM_18
-#define MPU6050_SCL_PIN          GPIO_NUM_19
+#define MPU6050_SDA_PIN          BOARD_MPU_SDA_PIN
+#define MPU6050_SCL_PIN          BOARD_MPU_SCL_PIN
 #define MPU6050_I2C_FREQ_HZ      400000
 
 #define MPU6050_ADDR_LOW         0x68
