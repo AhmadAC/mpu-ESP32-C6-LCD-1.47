@@ -12,6 +12,7 @@ idf_component_register(
         "servo_controller.cpp"
     INCLUDE_DIRS
         "."
+        ".."
     REQUIRES
         nvs_flash
         bt

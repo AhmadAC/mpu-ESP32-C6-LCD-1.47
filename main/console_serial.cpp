@@ -116,16 +116,5 @@ static void console_read_task(void *pvParameter) {
 }
 
 void console_serial_init(void) {
-    xTaskCreate(consol#pragma once
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void console_serial_init(void);
-void console_print(const char *str);
-
-#ifdef __cplusplus
-}
-#endife_read_task, "console_read_task", 4096, NULL, 5, NULL);
+    xTaskCreate(console_read_task, "console_read_task", 4096, NULL, 5, NULL);
 }
