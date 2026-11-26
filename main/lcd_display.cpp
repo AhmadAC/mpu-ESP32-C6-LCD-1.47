@@ -6,6 +6,8 @@
 #include "espnow_sync.h"
 #include "ble_server.h"
 
+#if HAS_ONBOARD_LCD
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/spi_master.h"
@@ -439,3 +441,14 @@ void lcd_display_init(void) {
     ESP_LOGI(TAG, "Waveshare 1.47-inch ST7789 LCD Initialized (MOSI:%d SCLK:%d CS:%d DC:%d BL:%d)",
              LCD_PIN_MOSI, LCD_PIN_SCLK, LCD_PIN_CS, LCD_PIN_DC, LCD_PIN_BL);
 }
+
+#else
+
+// Stubs for hardware boards without an onboard ST7789 LCD (such as YD-ESP32-S3)
+void lcd_display_init(void) {
+}
+
+void lcd_display_update(void) {
+}
+
+#endif // HAS_ONBOARD_LCD

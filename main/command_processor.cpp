@@ -21,6 +21,7 @@ static const char *TAG = "CMD_PROC";
 #define CLAW_CLOSED_ANGLE  0
 #define CLAW_OPEN_ANGLE    130
 
+#if NODE_IS_RECEIVER
 static int parse_servo_index(const char *token) {
     if (!token) return -1;
     if (strcmp(token, "1") == 0 || strcasecmp(token, "s1") == 0 || strcasecmp(token, "claw") == 0) return 0;
@@ -29,12 +30,14 @@ static int parse_servo_index(const char *token) {
     if (strcmp(token, "4") == 0 || strcasecmp(token, "s4") == 0 || strcasecmp(token, "scissor") == 0 || strcasecmp(token, "lift") == 0) return 3;
     return -1;
 }
+#endif
 
 static bool parse_bool_arg(const char *s) {
     if (!s) return false;
     return (strcasecmp(s, "on") == 0 || strcmp(s, "1") == 0 || strcasecmp(s, "true") == 0);
 }
 
+#if NODE_IS_SENDER
 static bool is_arm_motion_override(const char *cmd) {
     if (!cmd) return false;
     if ((cmd[0] == 's' || cmd[0] == 'S') && (cmd[1] >= '1' && cmd[1] <= '3')) return true;
@@ -57,6 +60,7 @@ static void release_mpu_control(command_print_fn_t print_fn) {
         mpu_control_report(print_fn);
     }
 }
+#endif
 
 void command_processor_init(void) {
     ESP_LOGI(TAG, "Command Processor Initialized for [%s] (4-Axis Arm & Scissor Lift)", NODE_ROLE_NAME);
@@ -144,7 +148,7 @@ void command_process(const char *cmd_line, command_print_fn_t print_fn) {
     }
 
     if (strcmp(p, "help") == 0 || strcmp(p, "?") == 0) {
-        print_fn("Waveshare ESP32-C6-LCD-1.47 Arm & Scissor Lift Controller:\n"
+        print_fn("Robotic Arm & Scissor Lift Controller:\n"
                  "  espnow                               : Print wireless link status\n"
                  "  mpu <on|off>                         : Toggle 20 Hz IMU telemetry stream\n"
                  "  mpu_read / mpu_get                   : Telemetry / state readout\n"
@@ -164,7 +168,7 @@ void command_process(const char *cmd_line, command_print_fn_t print_fn) {
     }
 
     if (strcmp(p, "reboot") == 0 || strcmp(p, "restart") == 0) {
-        print_fn("Rebooting Waveshare ESP32-C6...\n");
+        print_fn("Rebooting ESP32...\n");
         vTaskDelay(pdMS_TO_TICKS(100));
         esp_restart();
         return;
